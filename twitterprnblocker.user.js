@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.2.0
+// @version      0.2.1
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -31,7 +31,6 @@
 (function () {
   'use strict';
 
-  // ---------- Ayarlar ----------
   const STORE_KEYS = {
     keywords: 'tpb_keywords',
     accounts: 'tpb_accounts',
@@ -39,19 +38,13 @@
     hideCompletely: 'tpb_hide_completely',
   };
 
-  // Varsayilan kelime listesi: duzenlenebilir, hepsi kucuk harfe cevrilir.
-  // Asiri genis kelimelerden bilerek kacinildi (yanlis pozitif olmamasi icin).
   const DEFAULT_KEYWORDS = [
-    // EN
     'onlyfans', 'fansly', 'nsfw', 'porn', 'xxx', 'hentai', 'escort',
-    // TR
     '+18', 'ifsa', 'ifşa',
-    // hashtag bicimi metin icinde gecer, ayrica isaretlenmez
     '#nsfw', '#onlyfans', '#porn',
   ];
 
   const DEFAULT_ACCOUNTS = [
-    // Gomulu hesap listesi (@ isaretsiz, kucuk harf). Kullanicinin listesiyle birlesir, silinmez.
     'roshytv',
     'javcodelust',
     'xlovelyhub',
@@ -59,10 +52,8 @@
     'onlyfans',
   ];
 
-  // Varsayilan liste guncellenince mevcut kullanicilara da ulasmasi icin surumlenir.
   const DEFAULTS_VERSION = 2;
 
-  // ---------- Depolama (yerel, harici ag YOK) ----------
   function load(key, fallback) {
     try {
       if (typeof GM_getValue === 'function') {
@@ -103,8 +94,6 @@
       .filter(Boolean);
   }
 
-  // Yeni surumle gelen gomulu hesaplari mevcut listeyle birlestir.
-  // (Sadece kayitli surumden eskiyse calisir; kullanicinin kendi ekledikleri korunur.)
   try {
     if (!Array.isArray(blockedAccounts)) blockedAccounts = [];
     const appliedVersion = load(STORE_KEYS.accountsVersion, 0);
@@ -124,14 +113,12 @@
     }
   } catch (_) { /* yoksay, liste varsayilanlarla calismaya devam eder */ }
 
-  // ---------- Tespit ----------
   function getTweetText(article) {
     const textEl = article.querySelector('div[data-testid="tweetText"]');
     return textEl ? textEl.innerText || '' : article.innerText || '';
   }
 
   function getTweetAuthor(article) {
-    // Kullanici adi genelde /handle linklerinde: a[href^="/"]
     const links = article.querySelectorAll('a[href^="/"]');
     for (const a of links) {
       const href = a.getAttribute('href') || '';
@@ -141,7 +128,6 @@
         if (!bad.includes(m[1].toLowerCase())) return m[1].toLowerCase();
       }
     }
-    // yedek: UserName blogu
     const userEl = article.querySelector('div[data-testid="User-Name"]');
     if (userEl) {
       const t = userEl.innerText || '';
@@ -164,7 +150,6 @@
     return null;
   }
 
-  // ---------- Gizleme (SADECE kozmetik, X'e dokunmaz) ----------
   const STYLE_ID = 'tpb-style';
   function ensureStyle() {
     if (document.getElementById(STYLE_ID)) return;
@@ -211,7 +196,6 @@
       return;
     }
     article.classList.add('tpb-wrap');
-    // tweet icerigini bulaniklastir, rozetle gecici gosterme imkani ver
     const inner = article;
     inner.classList.add('tpb-blurred');
 
@@ -241,7 +225,6 @@
     }
   }
 
-  // ---------- Arayuz ----------
   let fab = null;
   function updateFab() {
     if (fab) fab.textContent = '🔒 TPB (' + hiddenCount + ')';
@@ -283,7 +266,6 @@
       save(STORE_KEYS.keywords, keywords);
       save(STORE_KEYS.accounts, blockedAccounts);
       save(STORE_KEYS.hideCompletely, hideCompletely);
-      // sayfadaki isaretleri sifirlayip bastan tara
       document.querySelectorAll('article[data-testid="tweet"]').forEach((a) => {
         delete a.dataset.tpbDone;
       });
@@ -311,7 +293,6 @@
     p.querySelector('#tpb-count').textContent = ' gizlenen: ' + hiddenCount;
   }
 
-  // ---------- Baslat ----------
   function init() {
     buildUI();
     scan(document);
