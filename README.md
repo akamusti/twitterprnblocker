@@ -2,10 +2,19 @@
 
 X akışındaki +18 / spam içerikleri **sadece senin tarayıcında** gizleyen Tampermonkey userscript'i.
 
-## Kurulum
+## Kurulum (tek tık)
+
 1. [Tampermonkey](https://www.tampermonkey.net/) kur.
-2. `twitterprnblocker.user.js` dosyasını açıp "Install" de (veya dosyayı Tampermonkey'e sürükle).
-3. x.com'u aç, sağ alttaki **🔒 TPB** butonundan kelime/hesap listeni düzenle.
+   - Chrome kullanıyorsan uzantı detayında **"Kullanıcı komut dosyalarına izin ver"** anahtarını aç.
+2. Şuna tıkla (Tampermonkey kurulum sayfasını otomatik açar):
+
+   👉 **[twitterprnblocker'i Kur](https://github.com/akamusti/twitterprnblocker/raw/refs/heads/main/twitterprnblocker.user.js)**
+
+3. Açılan sayfada **Kur / Install** de.
+4. x.com'u aç, sol alttaki **🔒 TPB** butonundan kelime/hesap listeni düzenle.
+
+> Not: `.user.js` ile biten ham (raw) dosya linkine tıklamak Tampermonkey'i otomatik tetikler — o repodaki düzen de aynen bu.
+> GreasyFork'a yükleyince buraya ikinci kurulum linki eklenecek.
 
 ## Nasıl çalışır?
 - `article[data-testid="tweet"]` kartlarını `MutationObserver` ile tarar.
