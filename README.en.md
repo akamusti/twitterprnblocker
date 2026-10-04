@@ -21,6 +21,7 @@ A lightweight Tampermonkey userscript that hides +18 / spam content in your X fe
 ## How it works
 - Scans tweet cards (`article[data-testid="tweet"]`) live with a `MutationObserver`.
 - Blurs (or fully hides, if you enable it) tweets matching your keyword/hashtag or account list.
+- Built-in account list: `@roshytv, @javcodelust, @xlovelyhub, @pornhub, @onlyfans` (merged into your list, removable from the panel).
 - Click the badge to temporarily reveal a single tweet.
 - All settings stay in your browser only (`GM_setValue` / `localStorage`).
 

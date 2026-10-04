@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.1.1
+// @version      0.2.0
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -35,6 +35,7 @@
   const STORE_KEYS = {
     keywords: 'tpb_keywords',
     accounts: 'tpb_accounts',
+    accountsVersion: 'tpb_accounts_version',
     hideCompletely: 'tpb_hide_completely',
   };
 
@@ -49,7 +50,17 @@
     '#nsfw', '#onlyfans', '#porn',
   ];
 
-  const DEFAULT_ACCOUNTS = []; // ornek: ["ornekhesap"] -> @ ornek: "kullaniciadi" ( @ isaretsiz, kucuk harf)
+  const DEFAULT_ACCOUNTS = [
+    // Gomulu hesap listesi (@ isaretsiz, kucuk harf). Kullanicinin listesiyle birlesir, silinmez.
+    'roshytv',
+    'javcodelust',
+    'xlovelyhub',
+    'pornhub',
+    'onlyfans',
+  ];
+
+  // Varsayilan liste guncellenince mevcut kullanicilara da ulasmasi icin surumlenir.
+  const DEFAULTS_VERSION = 2;
 
   // ---------- Depolama (yerel, harici ag YOK) ----------
   function load(key, fallback) {
@@ -91,6 +102,27 @@
       .map((a) => norm(a).replace(/^@/, '').trim())
       .filter(Boolean);
   }
+
+  // Yeni surumle gelen gomulu hesaplari mevcut listeyle birlestir.
+  // (Sadece kayitli surumden eskiyse calisir; kullanicinin kendi ekledikleri korunur.)
+  try {
+    if (!Array.isArray(blockedAccounts)) blockedAccounts = [];
+    const appliedVersion = load(STORE_KEYS.accountsVersion, 0);
+    if (appliedVersion < DEFAULTS_VERSION) {
+      const have = new Set(getAccountList());
+      let changed = false;
+      for (const a of DEFAULT_ACCOUNTS) {
+        const n = norm(a).replace(/^@/, '').trim();
+        if (n && !have.has(n)) {
+          blockedAccounts.push(n);
+          have.add(n);
+          changed = true;
+        }
+      }
+      if (changed) save(STORE_KEYS.accounts, blockedAccounts);
+      save(STORE_KEYS.accountsVersion, DEFAULTS_VERSION);
+    }
+  } catch (_) { /* yoksay, liste varsayilanlarla calismaya devam eder */ }
 
   // ---------- Tespit ----------
   function getTweetText(article) {

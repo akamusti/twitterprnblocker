@@ -22,6 +22,7 @@ X akışındaki +18 / spam içerikleri **sadece senin tarayıcında** gizleyen T
 ## Nasıl çalışır?
 - `article[data-testid="tweet"]` kartlarını `MutationObserver` ile tarar.
 - Kelime/hashtag veya hesap eşleşirse tweet'i blur'lar (veya ayardan tamamen gizler).
+- Gömülü hesap listesi: `@roshytv, @javcodelust, @xlovelyhub, @pornhub, @onlyfans` (kendi listene eklenir, panelden çıkarabilirsin).
 - Ayarlar sadece senin tarayıcında (`GM_setValue` / `localStorage`) saklanır.
 
 ## X kurallarına uyum (önemli)
