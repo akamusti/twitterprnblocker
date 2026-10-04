@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.1.0
+// @version      0.1.1
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -148,7 +148,7 @@
       '  border: 1px solid #536471; font-family: system-ui, sans-serif;',
       '}',
       '.tpb-panel {',
-      '  position: fixed; bottom: 70px; right: 16px; z-index: 10000; width: 300px;',
+      '  position: fixed; bottom: 70px; left: 16px; z-index: 10000; width: 300px;',
       '  background: #000; color: #e7e9ea; border: 1px solid #2f3336; border-radius: 16px;',
       '  padding: 12px; font-family: system-ui, sans-serif; font-size: 13px;',
       '  box-shadow: 0 4px 24px rgba(0,0,0,.5);',
@@ -158,7 +158,7 @@
       '.tpb-panel button { background: #1d9bf0; color: #fff; border: 0; border-radius: 9999px;',
       '  padding: 6px 12px; font-weight: 700; cursor: pointer; margin-top: 6px; }',
       '.tpb-fab {',
-      '  position: fixed; bottom: 16px; right: 16px; z-index: 10000;',
+      '  position: fixed; bottom: 16px; left: 16px; z-index: 10000;',
       '  background: #1d9bf0; color: #fff; border: 0; border-radius: 9999px;',
       '  padding: 10px 16px; font-weight: 800; cursor: pointer;',
       '  font-family: system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0,0,0,.4);',
