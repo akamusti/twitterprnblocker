@@ -1,5 +1,7 @@
 # twitterprnblocker
 
+[🇬🇧 English version](README.en.md)
+
 X akışındaki +18 / spam içerikleri **sadece senin tarayıcında** gizleyen Tampermonkey userscript'i.
 
 ## Kurulum (tek tık)
