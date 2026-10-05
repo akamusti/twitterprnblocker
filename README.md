@@ -2,37 +2,52 @@
 
 [🇬🇧 English version](README.en.md)
 
-X akışındaki +18 / spam içerikleri **sadece senin tarayıcında** gizleyen Tampermonkey userscript'i.
+X (Twitter) akışındaki +18, spam ve bot içeriklerini **sadece senin tarayıcında** filtreleyen hafif ve gizlilik odaklı Tampermonkey userscript'i.
 
-## Kurulum (tek tık)
+---
 
-1. [Tampermonkey](https://www.tampermonkey.net/) kur.
-   - Chrome kullanıyorsan uzantı detayında **"Kullanıcı komut dosyalarına izin ver"** anahtarını aç.
-2. Şuna tıkla (Tampermonkey kurulum sayfasını otomatik açar):
+## ⚡ Özellikler
 
-   👉 **[twitterprnblocker'i Kur (GitHub)](https://github.com/akamusti/twitterprnblocker/raw/refs/heads/main/twitterprnblocker.user.js)**
-   👉 **[twitterprnblocker'i Kur (GreasyFork)](https://greasyfork.org/tr/scripts/598698-twitter-prn-blocker-x-uyumlu-yerel-filtre)**
+- 🛡️ **Gelişmiş Tespit Mekanizması**:
+  - Tweet metni, etiketler ve bağlantı önizleme kartları (`onlyfans.com`, `fansly.com` vb.) taranır.
+  - **Bot Avcısı**: Yorumlara sadece nokta (`.`) veya emoji atan spam botların profil isimleri ve biyografilerindeki +18 kelimeler tespit edilir.
+  - **Görünmez Karakter Temizleyici (Anti-Evasion)**: Spam botların filtreleri atlatmak için kelimeler arasına gizlediği zero-width space ve unicode hilelerini çözer.
+- 🚀 **60 FPS Akıcı Performans**: `requestAnimationFrame` kuyruğu ile sayfa kaydırırken takılma veya kasma yapmaz.
+- 🎨 **Modern & Şık Panel Arayüzü**:
+  - X tarzı modern koyu tema modal panel.
+  - **Gizleme Modları**: Bulanıklaştırma (Blur) veya Tamamen Gizleme (`display: none`).
+  - **Hızlı Hesap Engelleme**: Gizlenen tweet rozetindeki `+ @kullanici` butonuyla tek tıkla hesabı engelli listesine ekleme.
+  - **Yedekleme & Sıfırlama**: Filtre listelerini JSON olarak dışa/içe aktarma veya tek tıkla varsayılanlara dönme.
+  - **Klavye Kısayolu**: `Alt + P` ile paneli anında açıp kapatma.
+  - **Tampermonkey Menü Entegrasyonu**: Uzantı menüsünden ayarlara erişim ve otomatik güncelleme desteği.
 
-3. Açılan sayfada **Kur / Install** de.
-4. x.com'u aç, sol alttaki **🔒 TPB** butonundan kelime/hesap listeni düzenle.
+---
 
-> Not: `.user.js` ile biten ham (raw) dosya linkine tıklamak Tampermonkey'i otomatik tetikler — o repodaki düzen de aynen bu.
-> GreasyFork sayfası da yayında, iki linkten biri kullanılabilir.
+## 📥 Kurulum (Tek Tık)
 
-## Nasıl çalışır?
-- `article[data-testid="tweet"]` kartlarını `MutationObserver` ile tarar.
-- Kelime/hashtag veya hesap eşleşirse tweet'i blur'lar (veya ayardan tamamen gizler).
-- Ayarlar sadece senin tarayıcında (`GM_setValue` / `localStorage`) saklanır.
+1. Tarayıcına [Tampermonkey](https://www.tampermonkey.net/) uzantısını kur.
+   - Chrome tabanlı tarayıcılarda: Uzantı detaylarında **"Kullanıcı komut dosyalarına izin ver"** (Developer Mode / User Scripts) seçeneğini aç.
+2. Aşağıdaki linklerden birine tıkla (Tampermonkey kurulum penceresini otomatik açar):
 
-## X kurallarına uyum (önemli)
-Bilerek **yapılmayanlar**:
-- Otomatik block / mute / unfollow / report yok, X API çağrısı yok.
-- Tweet verisini dışarı gönderme / toplama / aynalama yok.
-- Otomatik reply / DM / like / retweet yok.
-- Token, session, rate-limit atlatma yok.
+   👉 **[twitterprnblocker'ı Kur (GitHub)](https://github.com/akamusti/twitterprnblocker/raw/refs/heads/main/twitterprnblocker.user.js)**  
+   👉 **[twitterprnblocker'ı Kur (GreasyFork)](https://greasyfork.org/tr/scripts/598698-twitter-prn-blocker-x-uyumlu-yerel-filtre)**
 
-Tek işlev: sana zaten gösterilmiş içeriği ekranında kapatmak (AdBlock mantığı).
-Bu, Nitter / Bright Data davalarındaki scraping/satış ve otomasyon ihlallerinden farklıdır.
+3. Açılan sayfada **Kur / Install** butonuna bas.
+4. **x.com**'u aç; sol alttaki **🔒 TPB** butonundan veya `Alt + P` kısayolu ile ayarları yönet.
 
-## Dosyalar
-- `twitterprnblocker.user.js` — userscript v0.1
+---
+
+## 🔒 X (Twitter) Kurallarına ve Gizliliğe Tam Uyum
+
+Bu eklenti **%100 istemci taraflı (client-side)** bir filtreleme aracıdır:
+- ❌ Otomatik block / mute / unfollow / report tıklamaz, **X API çağrısı yapmaz**.
+- ❌ Tweet veya kullanıcı verilerini hiçbir harici sunucuya göndermez, toplamaz, aynalamaz.
+- ❌ Otomatik reply / DM / like / retweet atmaz.
+- ❌ Token, oturum veya rate-limit atlatma teknikleri kullanmaz.
+- ✅ **AdBlock Mantığı**: Zaten tarayıcına gelmiş DOM öğelerini sadece senin ekranında yerel CSS ile gizler.
+
+---
+
+## 📁 Dosyalar
+
+- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.3.0)
