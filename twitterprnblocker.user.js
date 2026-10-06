@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.3.1
+// @version      0.3.2
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -840,7 +840,7 @@
       <div class="tpb-panel-header">
         <div class="tpb-panel-title">
           <span>🔒 Twitter Prn Blocker</span>
-          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.3.1</span>
+          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.3.2</span>
         </div>
         <button class="tpb-close-btn" id="tpb-close-modal" title="Kapat">✕</button>
       </div>
