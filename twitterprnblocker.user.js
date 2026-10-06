@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.3.0
+// @version      0.3.1
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -256,15 +256,46 @@
     const st = document.createElement('style');
     st.id = STYLE_ID;
     st.textContent = `
+      /* BLUR KATMANI: sadece article'in kendisi bulaniklasir.
+         Rozet (.tpb-badge) ve veil (.tpb-veil) article'in KARDESI oldugu
+         icin bu filter'dan etkilenmez. */
       .tpb-blurred {
         filter: blur(16px) !important;
         user-select: none !important;
         pointer-events: none !important;
         transition: filter 0.2s ease-in-out !important;
       }
+      /* Hover / focus / active ile ASLA kendiliginden acilmasin.
+         Sadece rozetteki butona tiklayinca acilir. */
+      .tpb-blurred:hover,
+      .tpb-blurred:focus,
+      .tpb-blurred:focus-within,
+      .tpb-blurred:active,
+      .tpb-outer:hover > .tpb-blurred,
+      .tpb-outer:hover > article.tpb-blurred {
+        filter: blur(16px) !important;
+        user-select: none !important;
+        pointer-events: none !important;
+      }
+      .tpb-blurred video {
+        pointer-events: none !important;
+      }
+      .tpb-outer {
+        position: relative !important;
+      }
       .tpb-wrap {
         position: relative !important;
         min-height: 56px !important;
+      }
+      /* Seffaf tuzak katmani: mouse/touch tweet icerigine hic ulasamaz,
+         boylece X'in hover-card / video-autoplay / link-preview gibi
+         davranislari tetiklenemez. Tiklamalari yutar, blur'u acmaz. */
+      .tpb-veil {
+        position: absolute;
+        inset: 0;
+        z-index: 9000;
+        background: transparent;
+        cursor: default;
       }
       .tpb-badge {
         position: absolute;
@@ -545,8 +576,18 @@
     if (article.style.display === 'none') {
       article.style.display = '';
     }
-    const badge = article.querySelector('.tpb-badge');
-    if (badge) badge.remove();
+    // Yeni yapi: rozet + veil sarmalayici .tpb-outer'in cocugu
+    const outer = article.parentElement;
+    if (outer && outer.classList && outer.classList.contains('tpb-outer')) {
+      outer.querySelectorAll(':scope > .tpb-badge, :scope > .tpb-veil').forEach(n => n.remove());
+      if (outer.style.display === 'none') outer.style.display = '';
+      // unwrap: article'i eski yerine koy, bos wrapper'i kaldir
+      outer.replaceWith(article);
+    } else {
+      // Eski surumden kalma: rozet article icinde kalmissa temizle
+      const badge = article.querySelector('.tpb-badge');
+      if (badge) badge.remove();
+    }
   }
 
   function hideArticle(article, match) {
@@ -556,14 +597,56 @@
     hiddenCount += 1;
     updateFab();
 
+    // Sarmalayici: rozet blur'lu article'in KARDESI olur, boylece
+    // parent'taki blur filter rozeti bulaniklastirmaz.
+    let outer = article.parentElement;
+    if (!outer || !outer.classList || !outer.classList.contains('tpb-outer')) {
+      outer = document.createElement('div');
+      outer.className = 'tpb-outer tpb-wrap';
+      article.parentNode.insertBefore(outer, article);
+      outer.appendChild(article);
+    }
+
     if (hideCompletely) {
-      article.style.display = 'none';
+      // Bos wrapper akista yer kaplamasin diye wrapper'i gizle
+      outer.style.display = 'none';
       return;
     }
 
-    article.classList.add('tpb-wrap', 'tpb-blurred');
+    article.classList.add('tpb-blurred');
 
-    const badge = document.createElement('div');
+    // Blur'lu videolarin ses/goruntu sizdirmamasi icin durdur + sessize al
+    try {
+      article.querySelectorAll('video').forEach(v => {
+        try { v.pause(); } catch (_) { /* yoksay */ }
+        v.muted = true;
+        v.removeAttribute('autoplay');
+      });
+    } catch (_) { /* yoksay */ }
+
+    // Seffaf tuzak katmani (yoksa ekle): hover/click icerige ulasamaz
+    let veil = outer.querySelector(':scope > .tpb-veil');
+    if (!veil) {
+      veil = document.createElement('div');
+      veil.className = 'tpb-veil';
+      veil.setAttribute('aria-hidden', 'true');
+      // Capture phase: alttaki tweet linklerine hic dusmesin
+      veil.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }, true);
+      veil.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+      }, true);
+      outer.appendChild(veil);
+    } else {
+      veil.style.display = '';
+    }
+
+    let badge = outer.querySelector(':scope > .tpb-badge');
+    if (badge) return; // zaten yerlesmis
+    badge = document.createElement('div');
     badge.className = 'tpb-badge';
 
     const textSpan = document.createElement('span');
@@ -581,11 +664,15 @@
       e.stopPropagation();
       e.preventDefault();
       const isBlurred = article.classList.contains('tpb-blurred');
+      const veilEl = outer.querySelector(':scope > .tpb-veil');
       if (isBlurred) {
+        // SADECE bu butona tiklayinca acilir. Hover/mouseover asla acmaz.
         article.classList.remove('tpb-blurred');
+        if (veilEl) veilEl.style.display = 'none';
         toggleBtn.textContent = 'tekrar gizle';
       } else {
         article.classList.add('tpb-blurred');
+        if (veilEl) veilEl.style.display = '';
         toggleBtn.textContent = 'göster';
       }
     });
@@ -616,7 +703,8 @@
       badge.appendChild(addAccBtn);
     }
 
-    article.appendChild(badge);
+    // Rozet wrapper'in cocugu olur -> blur filter'dan etkilenmez, hep net okunur.
+    outer.appendChild(badge);
   }
 
   function scan(root) {
@@ -713,7 +801,7 @@
       <div class="tpb-panel-header">
         <div class="tpb-panel-title">
           <span>🔒 Twitter Prn Blocker</span>
-          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.3.0</span>
+          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.3.1</span>
         </div>
         <button class="tpb-close-btn" id="tpb-close-modal" title="Kapat">✕</button>
       </div>
