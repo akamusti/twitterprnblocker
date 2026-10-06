@@ -308,7 +308,7 @@
         font-weight: 600;
         padding: 6px 12px;
         border-radius: 9999px;
-        cursor: pointer;
+        cursor: default;
         border: 1px solid rgba(83, 100, 113, 0.6);
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
@@ -316,6 +316,9 @@
         display: inline-flex;
         align-items: center;
         gap: 6px;
+        max-width: calc(100% - 24px);
+        overflow: hidden;
+        white-space: nowrap;
         backdrop-filter: blur(8px);
         transition: background 0.15s ease, transform 0.15s ease;
       }
@@ -324,6 +327,24 @@
         color: #ffffff;
         border-color: #1d9bf0;
         transform: scale(1.02);
+      }
+      .tpb-badge-lock {
+        flex-shrink: 0;
+      }
+      /* Neden metni uzunsa "..." ile kisalir, tamami tooltip'te */
+      .tpb-badge-reason {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 170px;
+        opacity: 0.75;
+        font-weight: 500;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .tpb-badge-sep {
+        opacity: 0.4;
+        flex-shrink: 0;
       }
       .tpb-badge-btn {
         background: transparent;
@@ -648,10 +669,23 @@
     if (badge) return; // zaten yerlesmis
     badge = document.createElement('div');
     badge.className = 'tpb-badge';
+    // Tam neden tooltip'te, rozet uzerinde sadece ozet gorunur
+    badge.title = 'Gizlenme nedeni: ' + match.label;
 
-    const textSpan = document.createElement('span');
-    textSpan.textContent = '🔒 gizlendi (' + match.label + ')';
-    badge.appendChild(textSpan);
+    const lockSpan = document.createElement('span');
+    lockSpan.className = 'tpb-badge-lock';
+    lockSpan.textContent = '🔒 gizlendi';
+    badge.appendChild(lockSpan);
+
+    const reasonSpan = document.createElement('span');
+    reasonSpan.className = 'tpb-badge-reason';
+    reasonSpan.textContent = match.label;
+    badge.appendChild(reasonSpan);
+
+    const sepSpan = document.createElement('span');
+    sepSpan.className = 'tpb-badge-sep';
+    sepSpan.textContent = '·';
+    badge.appendChild(sepSpan);
 
     const toggleBtn = document.createElement('button');
     toggleBtn.type = 'button';
@@ -687,8 +721,13 @@
       addAccBtn.className = 'tpb-badge-btn';
       addAccBtn.style.opacity = '0.75';
       addAccBtn.style.marginLeft = '4px';
+      addAccBtn.style.maxWidth = '110px';
+      addAccBtn.style.overflow = 'hidden';
+      addAccBtn.style.textOverflow = 'ellipsis';
+      addAccBtn.style.whiteSpace = 'nowrap';
+      addAccBtn.style.flexShrink = '0';
       addAccBtn.title = '@' + author + ' kullanıcısını engelli listesine kalıcı ekle';
-      addAccBtn.textContent = '+ @' + author;
+      addAccBtn.textContent = '+' + author;
       addAccBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
