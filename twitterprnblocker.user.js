@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.3.2
-// @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
+// @version      0.4.0
+// @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler: alan adi, leetspeak/obfuscation, hassas medya, beyaz liste ve RT filtresi. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -40,6 +40,10 @@
     hideCompletely: 'tpb_hide_completely',
     scanProfiles: 'tpb_scan_profiles',
     cleanZeroWidth: 'tpb_clean_zerowidth',
+    blockDomains: 'tpb_block_domains',
+    deobfuscate: 'tpb_deobfuscate',
+    whitelist: 'tpb_whitelist',
+    hideRetweets: 'tpb_hide_retweets',
     fabPosition: 'tpb_fab_pos',
     fabVisible: 'tpb_fab_visible',
   };
@@ -49,7 +53,16 @@
     'escort', 'eskort', '+18', '18+', 'ifsa', 'ifşa',
     'sikiş', 'azgın', 'vip kanal', 'arşiv link', 'arsiv link',
     'leaks', 'nudes', 'camgirl', 'sex tape',
-    '#nsfw', '#onlyfans', '#porn', '#ifsa', '#ifşa'
+    '#nsfw', '#onlyfans', '#porn', '#ifsa', '#ifşa',
+    // Genisletilmis v0.4.0 listesi
+    'erotik', 'erotic', 'fetish', 'bdsm', 'nsfw art', '18 yas',
+    'seks', 'sikis', 'yarrak', 'orospu', 'kerhaneler', 'randocu',
+    'pornhub', 'xvideos', 'xnxx', 'redtube', 'youporn', 'xhamster',
+    'hentai', 'ecchi', 'seks tape', 'sex tape', 'nude', 'nüde',
+    'fetish onlyfans', 'vip link', 'premium link', 'kirli link',
+    'abonelik', 'şifreli', 'sifreli', 'kilitli hesap', 'unfollow',
+    'dm at', 'özel içerik', 'ozel icerik', 'paylaşım linki', 'paylasim linki',
+    'dm', 'naughty', 'milf', 'anal', 'fetish shop', 'hookup'
   ];
 
   const DEFAULT_ACCOUNTS = [
@@ -60,7 +73,51 @@
     'onlyfans',
   ];
 
-  const DEFAULTS_VERSION = 3;
+  // Engellenmesi gereken alan adlari ve kisa link servisleri (v0.4.0)
+  const DEFAULT_DOMAINS = [
+    'onlyfans.com',
+    'fansly.com',
+    'fansly.me',
+    'onlyfans.me',
+    'onlyfans.lol',
+    'onlyfans.fan',
+    'onlyfans.photos',
+    'fansly.link',
+    'manyfans.com',
+    'fanvue.com',
+    'loyalfans.com',
+    'allure.com',
+    'justforfans.com',
+    'patreon.com',
+    'thrones.com',
+    'pornhub.com',
+    'xvideos.com',
+    'xnxx.com',
+    'xhamster.com',
+    'redtube.com',
+    'youporn.com',
+    'spankbang.com',
+    'motherless.com',
+    'erome.org',
+    'rule34.xxx',
+    'e-hentai.org',
+    'nhentai.net',
+    'hitomi.me',
+    'tsumino.moe',
+    'hanime.tv',
+    'hentaistream',
+    'linktr.ee',
+    'linktr.ee/fanlink',
+    'beacons.ai',
+    'snipfeed.co',
+    'solo.to',
+    'fanvue.link',
+  ];
+
+  // Bu hesaplar hicbir kuralda ASLA gizlenmez (en yuksek oncelik)
+  const DEFAULT_WHITELIST = [];
+
+  const DEFAULTS_VERSION = 4;
 
   function load(key, fallback) {
     try {
@@ -90,6 +147,10 @@
   let hideCompletely = load(STORE_KEYS.hideCompletely, false);
   let scanProfiles = load(STORE_KEYS.scanProfiles, true);
   let cleanZeroWidth = load(STORE_KEYS.cleanZeroWidth, true);
+  let blockDomains = load(STORE_KEYS.blockDomains, DEFAULT_DOMAINS);
+  let deobfuscate = load(STORE_KEYS.deobfuscate, true);
+  let whitelist = load(STORE_KEYS.whitelist, DEFAULT_WHITELIST);
+  let hideRetweets = load(STORE_KEYS.hideRetweets, false);
   let fabPosition = load(STORE_KEYS.fabPosition, 'left');
   let fabVisible = load(STORE_KEYS.fabVisible, true);
   let hiddenCount = 0;
@@ -97,13 +158,48 @@
   // Zero-width space and invisible character cleaner (anti-evasion)
   const ZERO_WIDTH_REGEX = /[\u200B-\u200D\uFEFF\u00AD\u2060\u180E]/g;
 
+  // Zero-width space and invisible character cleaner (anti-evasion)
+  // + Unicode homoglyph normalizasyonu (Kiril/Latin karisimi) (v0.4.0)
+
+  // Yaygin leetspeak / karakter degistirme tabani
+  const LEET_MAP = {
+    '0': 'o', '1': 'i', '3': 'e', '4': 'a', '5': 's', '7': 't',
+    '8': 'b', '9': 'g', '@': 'a', '$': 's', '!': 'i', '|': 'i',
+    '+': 't', '(': 'c', ')': 'o', '[': 'c', ']': 'o', '{': 'c', '}': 'o',
+    '<': 'c', '>': 'o', '*': '', '-': '', '_': '', '.': '', ',': '',
+    ' ': '', '"': '', "'": '', '/': '', '\\': '', '~': '', '^': '',
+  };
+
+  // Kiril benzeri karakterleri Latin karsiliklarina cevir
+  const HOMOGLYPH_MAP = {
+    '\u0430': 'a', '\u0435': 'e', '\u043E': 'o', '\u0440': 'p',
+    '\u0441': 'c', '\u0443': 'y', '\u0445': 'x', '\u0456': 'i',
+    '\u0458': 'j', '\u04BB': 'h', '\u04CF': 'l', '\u03B1': 'a',
+    '\u03B5': 'e', '\u03BF': 'o', '\u03C1': 'p', '\u03C5': 'u',
+  };
+
   // Leetspeak & character normalizer
   function normalizeText(str, removeInvisible = true) {
     if (!str) return '';
-    let res = str.toLocaleLowerCase('tr');
+    let res = String(str).toLocaleLowerCase('tr');
     if (removeInvisible && cleanZeroWidth) {
       res = res.replace(ZERO_WIDTH_REGEX, '');
     }
+    if (deobfuscate) {
+      // Homoglyph -> Latin
+      res = res.replace(/[\u0430\u0435\u043E\u0440\u0441\u0443\u0445\u0456\u0458\u04BB\u04CF\u03B1\u03B5\u03BF\u03C1\u03C5]/g,
+        c => HOMOGLYPH_MAP[c] || c);
+    }
+    return res;
+  }
+
+  // Obfuscation cozucu: ayirici karakterleri ve leet'i temizler.
+  // "p.o.r.n" / "p0rn" / "p * rn" -> "porn" gibi kacinmayi engeller.
+  function deobfuscateText(str) {
+    let res = normalizeText(str);
+    if (!res) return '';
+    // Leet + ayirici temizligi
+    res = res.split('').map(c => (c in LEET_MAP ? LEET_MAP[c] : c)).join('');
     return res;
   }
 
@@ -119,18 +215,59 @@
       .filter(Boolean);
   }
 
+  function getDomainList() {
+    return (Array.isArray(blockDomains) ? blockDomains : [])
+      .map(d => normalizeText(d).replace(/^https?:\/\//, '').replace(/^www\./, '').trim())
+      .filter(Boolean);
+  }
+
+  function getWhitelist() {
+    return (Array.isArray(whitelist) ? whitelist : [])
+      .map(a => normalizeText(a).replace(/^@/, '').trim())
+      .filter(Boolean);
+  }
+
   let cachedAccountSet = new Set(getAccountList());
   let cachedKeywordList = getKeywordList();
+  let cachedDomainList = getDomainList();
+  let cachedWhitelist = new Set(getWhitelist());
 
   function refreshCaches() {
     cachedAccountSet = new Set(getAccountList());
     cachedKeywordList = getKeywordList();
+    cachedDomainList = getDomainList();
+    cachedWhitelist = new Set(getWhitelist());
+  }
+
+  // Bir metinde engelli alan adi var mi?
+  function findBlockedDomain(text) {
+    if (!text) return null;
+    const hay = ' ' + text.toLowerCase();
+    for (const d of cachedDomainList) {
+      if (hay.includes(d) || hay.includes(' ' + d)) {
+        return d;
+      }
+    }
+    return null;
+  }
+
+  // Tweet metnindeki tum linkleri (href) topla
+  function getLinks(article) {
+    const links = [];
+    article.querySelectorAll('a[href]').forEach(a => {
+      const href = a.getAttribute('href') || '';
+      // t.co kisaltilmis linkler harici olabilir ama alan adi eslesmesi yine denenir
+      if (href) links.push(href);
+    });
+    return links.join(' ');
   }
 
   // Varsayilan listeleri surum guncellemesinde birlestir
   try {
     if (!Array.isArray(blockedAccounts)) blockedAccounts = [];
     if (!Array.isArray(keywords)) keywords = [];
+    if (!Array.isArray(blockDomains)) blockDomains = [];
+    if (!Array.isArray(whitelist)) whitelist = [];
     const appliedVersion = load(STORE_KEYS.accountsVersion, 0);
     if (appliedVersion < DEFAULTS_VERSION) {
       const haveAcc = new Set(getAccountList());
@@ -156,6 +293,18 @@
         }
       }
       if (kwChanged) save(STORE_KEYS.keywords, keywords);
+
+      const haveDom = new Set(getDomainList());
+      let domChanged = false;
+      for (const d of DEFAULT_DOMAINS) {
+        const n = normalizeText(d).replace(/^https?:\/\//, '').replace(/^www\./, '').trim();
+        if (n && !haveDom.has(n)) {
+          blockDomains.push(n);
+          haveDom.add(n);
+          domChanged = true;
+        }
+      }
+      if (domChanged) save(STORE_KEYS.blockDomains, blockDomains);
 
       save(STORE_KEYS.accountsVersion, DEFAULTS_VERSION);
       refreshCaches();
@@ -224,12 +373,26 @@
   function matchReason(article) {
     const { handle, displayName } = getAuthorInfo(article);
 
+    // 0. Beyaz liste her seyin ustunde (hicbir kural uygulanmaz)
+    if (handle && cachedWhitelist.has(handle)) return null;
+
     // 1. Engelli hesap kontrolu
     if (handle && cachedAccountSet.has(handle)) {
       return { type: 'account', value: '@' + handle, label: 'hesap: @' + handle };
     }
 
-    // 2. Profil adi / gorunen isimde anahtar kelime kontrolu (bot avcisi)
+    // 2. Retweet filtresi: engelli hesabin RT'si
+    if (hideRetweets) {
+      const ctx = article.querySelector('[data-testid="socialContext"]');
+      const ctxText = ctx ? normalizeText(ctx.innerText || '') : '';
+      for (const acc of cachedAccountSet) {
+        if (ctxText.includes('@' + acc)) {
+          return { type: 'retweet', value: acc, label: 'RT: @' + acc };
+        }
+      }
+    }
+
+    // 3. Profil adi / gorunen isimde anahtar kelime kontrolu (bot avcisi)
     if (scanProfiles && displayName) {
       const normName = normalizeText(displayName);
       for (const kw of cachedKeywordList) {
@@ -239,11 +402,38 @@
       }
     }
 
-    // 3. Tweet icerigi, linkler ve kartlarda anahtar kelime kontrolu
-    const text = normalizeText(getTweetText(article));
+    // 4. Alan adi engellemesi (onlyfans.com, fansly.com, ...)
+    const links = getLinks(article);
+    const domFromLinks = findBlockedDomain(links);
+    if (domFromLinks) {
+      return { type: 'domain', value: domFromLinks, label: 'link: ' + domFromLinks };
+    }
+
+    // 5. Tweet icerigi, linkler ve kartlarda anahtar kelime kontrolu
+    const rawText = getTweetText(article) + ' ' + links;
+    const text = normalizeText(rawText);
     for (const kw of cachedKeywordList) {
       if (kw && text.includes(kw)) {
         return { type: 'keyword', value: kw, label: 'kelime: ' + kw };
+      }
+    }
+
+    // 6. Obfuscation cozucu ile ikinci tarama (p0rn, p.o.r.n, ...)
+    if (deobfuscate) {
+      const deob = deobfuscateText(rawText);
+      for (const kw of cachedKeywordList) {
+        const kwd = deobfuscateText(kw);
+        if (kwd.length >= 3 && deob.includes(kwd)) {
+          return { type: 'obfuscated', value: kw, label: 'gizli kelime: ' + kw };
+        }
+      }
+    }
+
+    // 7. Obfuscation cozulmus alan adi kontrolu
+    if (deobfuscate) {
+      const domFromLinks = findBlockedDomain(deobfuscateText(links));
+      if (domFromLinks) {
+        return { type: 'domain', value: domFromLinks, label: 'link: ' + domFromLinks };
       }
     }
 
@@ -715,7 +905,7 @@
 
     // Hizli listeye ekleme kisayolu (eger hesap tespit edildiyse ve listede henuz yoksa)
     const author = getAuthorInfo(article).handle;
-    if (author && !cachedAccountSet.has(author)) {
+    if (author && !cachedAccountSet.has(author) && !cachedWhitelist.has(author)) {
       const addAccBtn = document.createElement('button');
       addAccBtn.type = 'button';
       addAccBtn.className = 'tpb-badge-btn';
@@ -840,7 +1030,7 @@
       <div class="tpb-panel-header">
         <div class="tpb-panel-title">
           <span>🔒 Twitter Prn Blocker</span>
-          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.3.2</span>
+          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.4.0</span>
         </div>
         <button class="tpb-close-btn" id="tpb-close-modal" title="Kapat">✕</button>
       </div>
@@ -905,6 +1095,18 @@
           <textarea id="tpb-acc-input" placeholder="roshytv, javcodelust, ...">${(blockedAccounts || []).join(', ')}</textarea>
           <div style="font-size:11px; color:#71767b; margin-top:2px;">Toplam ${(blockedAccounts || []).length} hesap aktif</div>
         </div>
+
+        <div>
+          <label>Engelli Siteler / Alan Adları (virgülle ayır)</label>
+          <textarea id="tpb-dom-input" placeholder="onlyfans.com, fansly.com, ...">${(blockDomains || []).join(', ')}</textarea>
+          <div style="font-size:11px; color:#71767b; margin-top:2px;">Toplam ${(blockDomains || []).length} alan adı aktif · <code>t.co</code> kısaltmaları da taranır</div>
+        </div>
+
+        <div>
+          <label>Beyaz Liste (asla gizlenmeyecek hesaplar)</label>
+          <textarea id="tpb-wl-input" placeholder="ataturk, ...">${(whitelist || []).join(', ')}</textarea>
+          <div style="font-size:11px; color:#71767b; margin-top:2px;">Toplam ${(whitelist || []).length} hesap muaf · beyaz listedekiler hiçbir filtreye girmez</div>
+        </div>
       `;
     } else if (activeTab === 'settings') {
       container.innerHTML = `
@@ -922,6 +1124,22 @@
             <span>Profil İsimlerini ve Biyografileri Tara (Bot Avcısı)</span>
           </label>
           <span class="tpb-checkbox-desc">Yorumlarda sadece '.' atan botların profil isimlerindeki +18 kelimeleri yakalar.</span>
+        </div>
+
+        <div class="tpb-checkbox-group">
+          <label class="tpb-checkbox-label">
+            <input type="checkbox" id="tpb-deobfuscate-check" ${deobfuscate ? 'checked' : ''}>
+            <span>Obfuscation / Leetspeak Çözücü (v0.4.0)</span>
+          </label>
+          <span class="tpb-checkbox-desc"><b>p0rn</b>, <b>p.o.r.n</b>, <b>p*r*n</b>, Kiril harfleri gibi filtre kaçırma yöntemlerini çözer ve tespit eder.</span>
+        </div>
+
+        <div class="tpb-checkbox-group">
+          <label class="tpb-checkbox-label">
+            <input type="checkbox" id="tpb-retweet-check" ${hideRetweets ? 'checked' : ''}>
+            <span>Engelli Hesapların Retweet'lerini de Gizle</span>
+          </label>
+          <span class="tpb-checkbox-desc">Açıkken engelli hesapların RT'leri de gizlenir (orijinal gönderi hesabı engelli değilse bile).</span>
         </div>
 
         <div class="tpb-checkbox-group">
@@ -961,7 +1179,7 @@
       `;
 
       container.querySelector('#tpb-export-btn').addEventListener('click', () => {
-        const data = JSON.stringify({ keywords, blockedAccounts, hideCompletely, scanProfiles, cleanZeroWidth }, null, 2);
+        const data = JSON.stringify({ keywords, blockedAccounts, blockDomains, whitelist, hideCompletely, scanProfiles, cleanZeroWidth, deobfuscate, hideRetweets }, null, 2);
         navigator.clipboard.writeText(data).then(() => {
           showToast('Yedek JSON panoya kopyalandı!');
         }).catch(() => {
@@ -976,12 +1194,20 @@
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed.keywords)) keywords = parsed.keywords;
           if (Array.isArray(parsed.blockedAccounts)) blockedAccounts = parsed.blockedAccounts;
+          if (Array.isArray(parsed.blockDomains)) blockDomains = parsed.blockDomains;
+          if (Array.isArray(parsed.whitelist)) whitelist = parsed.whitelist;
           if (typeof parsed.hideCompletely === 'boolean') hideCompletely = parsed.hideCompletely;
           if (typeof parsed.scanProfiles === 'boolean') scanProfiles = parsed.scanProfiles;
           if (typeof parsed.cleanZeroWidth === 'boolean') cleanZeroWidth = parsed.cleanZeroWidth;
+          if (typeof parsed.deobfuscate === 'boolean') deobfuscate = parsed.deobfuscate;
+          if (typeof parsed.hideRetweets === 'boolean') hideRetweets = parsed.hideRetweets;
 
           save(STORE_KEYS.keywords, keywords);
           save(STORE_KEYS.accounts, blockedAccounts);
+          save(STORE_KEYS.blockDomains, blockDomains);
+          save(STORE_KEYS.whitelist, whitelist);
+          save(STORE_KEYS.deobfuscate, deobfuscate);
+          save(STORE_KEYS.hideRetweets, hideRetweets);
           save(STORE_KEYS.hideCompletely, hideCompletely);
           save(STORE_KEYS.scanProfiles, scanProfiles);
           save(STORE_KEYS.cleanZeroWidth, cleanZeroWidth);
@@ -999,12 +1225,20 @@
         if (confirm('Tüm kelimeler ve hesaplar varsayılan listeye sıfırlansın mı?')) {
           keywords = [...DEFAULT_KEYWORDS];
           blockedAccounts = [...DEFAULT_ACCOUNTS];
+          blockDomains = [...DEFAULT_DOMAINS];
+          whitelist = [...DEFAULT_WHITELIST];
           hideCompletely = false;
           scanProfiles = true;
           cleanZeroWidth = true;
+          deobfuscate = true;
+          hideRetweets = false;
 
           save(STORE_KEYS.keywords, keywords);
           save(STORE_KEYS.accounts, blockedAccounts);
+          save(STORE_KEYS.blockDomains, blockDomains);
+          save(STORE_KEYS.whitelist, whitelist);
+          save(STORE_KEYS.deobfuscate, deobfuscate);
+          save(STORE_KEYS.hideRetweets, hideRetweets);
           save(STORE_KEYS.hideCompletely, hideCompletely);
           save(STORE_KEYS.scanProfiles, scanProfiles);
           save(STORE_KEYS.cleanZeroWidth, cleanZeroWidth);
@@ -1024,6 +1258,10 @@
     const hideEl = panel.querySelector('#tpb-hide-check');
     const profEl = panel.querySelector('#tpb-profiles-check');
     const zeroEl = panel.querySelector('#tpb-zerowidth-check');
+    const domEl = panel.querySelector('#tpb-dom-input');
+    const wlEl = panel.querySelector('#tpb-wl-input');
+    const deobEl = panel.querySelector('#tpb-deobfuscate-check');
+    const rtEl = panel.querySelector('#tpb-retweet-check');
     const fabEl = panel.querySelector('#tpb-fab-check');
     const posEl = panel.querySelector('#tpb-pos-select');
 
@@ -1034,6 +1272,22 @@
     if (accEl) {
       blockedAccounts = accEl.value.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
       save(STORE_KEYS.accounts, blockedAccounts);
+    }
+    if (domEl) {
+      blockDomains = domEl.value.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+      save(STORE_KEYS.blockDomains, blockDomains);
+    }
+    if (wlEl) {
+      whitelist = wlEl.value.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+      save(STORE_KEYS.whitelist, whitelist);
+    }
+    if (deobEl) {
+      deobfuscate = deobEl.checked;
+      save(STORE_KEYS.deobfuscate, deobfuscate);
+    }
+    if (rtEl) {
+      hideRetweets = rtEl.checked;
+      save(STORE_KEYS.hideRetweets, hideRetweets);
     }
     if (hideEl) {
       hideCompletely = hideEl.checked;
