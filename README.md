@@ -13,7 +13,8 @@ X (Twitter) akışındaki +18, spam ve bot içeriklerini **sadece senin tarayıc
   - **Bot Avcısı**: Yorumlara sadece nokta (`.`) veya emoji atan spam botların profil isimleri ve biyografilerindeki +18 kelimeler tespit edilir.
   - **Görünmez Karakter Temizleyici (Anti-Evasion)**: Spam botların filtreleri atlatmak için kelimeler arasına gizlediği zero-width space ve unicode hilelerini çözer.
   - **Alan Adı Engelleme (v0.4.0)**: `onlyfans.com`, `fansly.com`, `fanvue.com`, `patreon.com`, `linktr.ee` gibi 40+ alan adı ve kısa link servisi otomatik engellenir (`t.co` kısaltmaları dahil).
-  - **Obfuscation / Leetspeak Çözücü (v0.4.0)**: `p0rn`, `p.o.r.n`, `p*r*n`, Kiril harfleri (homoglyph) gibi filtre kaçırma yöntemlerini normalize eder ve tespit eder.
+  - **Obfuscation / Leetspeak Çözücü (v0.4.0)**: `p0rn`, `p.o.r.n`, `p-o-r-n`, Kiril harfleri (homoglyph) gibi filtre kaçırma yöntemlerini normalize eder ve tespit eder.
+  - **Kelime Sınırı ile Eşleşme (v0.4.1)**: Anahtar kelimeler artık **kelime sınırı** ile eşleşir — `kanal`, `analiz`, `kanalı`, `normalizasyon` gibi masum kelimeler **asla** tetiklenmez.
   - **Beyaz Liste (v0.4.0)**: Hiçbir filtreye girmemesini istediğin hesaplar (muaf liste).
   - **Retweet Filtresi (v0.4.0)**: Engelli hesapların RT'lerini de gizler (opsiyonel).
 - 🚀 **60 FPS Akıcı Performans**: `requestAnimationFrame` kuyruğu ile sayfa kaydırırken takılma veya kasma yapmaz.
@@ -54,4 +55,4 @@ Bu eklenti **%100 istemci taraflı (client-side)** bir filtreleme aracıdır:
 
 ## 📁 Dosyalar
 
-- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.0)
+- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.1)

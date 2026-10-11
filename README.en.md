@@ -13,7 +13,8 @@ A lightweight, privacy-first Tampermonkey userscript that filters out +18, spam,
   - **Bot Hunter**: Detects adult keywords in user display names and bios for bot replies that post meaningless dots (`.`) or emojis.
   - **Anti-Evasion Cleaner**: Strips zero-width spaces and invisible Unicode characters that spam bots use to bypass keyword filters.
   - **Domain Blocking (v0.4.0)**: Auto-blocks 40+ adult platforms and link shorteners such as `onlyfans.com`, `fansly.com`, `fanvue.com`, `patreon.com`, `linktr.ee` (including `t.co` shortened links).
-  - **Obfuscation / Leetspeak Solver (v0.4.0)**: Normalizes filter-evasion tricks like `p0rn`, `p.o.r.n`, `p*r*n` and Cyrillic homoglyphs.
+  - **Obfuscation / Leetspeak Solver (v0.4.0)**: Normalizes filter-evasion tricks like `p0rn`, `p.o.r.n`, `p-o-r-n` and Cyrillic homoglyphs.
+  - **Word-Boundary Matching (v0.4.1)**: Keywords now match on **word boundaries** — innocent words like `kanal`, `analiz`, `kanalı`, and `normalizasyon` are **never** triggered.
   - **Whitelist (v0.4.0)**: Exempt specific accounts so they are never hidden, regardless of any rule.
   - **Retweet Filter (v0.4.0)**: Optionally hides retweets coming from blocked accounts.
 - 🚀 **Buttery 60 FPS Performance**: Uses a `requestAnimationFrame` mutation batching queue to prevent scroll stutters on heavy X timelines.
@@ -54,4 +55,4 @@ This userscript operates **strictly client-side**:
 
 ## 📁 Files
 
-- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.0)
+- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.1)

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.4.0
+// @version      0.4.1
 // @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler: alan adi, leetspeak/obfuscation, hassas medya, beyaz liste ve RT filtresi. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
@@ -56,14 +56,18 @@
     '#nsfw', '#onlyfans', '#porn', '#ifsa', '#ifşa',
     // Genisletilmis v0.4.0 listesi
     'erotik', 'erotic', 'fetish', 'bdsm', 'nsfw art', '18 yas',
-    'seks', 'sikis', 'yarrak', 'orospu', 'kerhaneler', 'randocu',
+    'seks', 'yarrak', 'orospu', 'randocu', 'sikiş',
     'pornhub', 'xvideos', 'xnxx', 'redtube', 'youporn', 'xhamster',
     'hentai', 'ecchi', 'seks tape', 'sex tape', 'nude', 'nüde',
     'fetish onlyfans', 'vip link', 'premium link', 'kirli link',
-    'abonelik', 'şifreli', 'sifreli', 'kilitli hesap', 'unfollow',
-    'dm at', 'özel içerik', 'ozel icerik', 'paylaşım linki', 'paylasim linki',
-    'dm', 'naughty', 'milf', 'anal', 'fetish shop', 'hookup'
+    'özel içerik', 'ozel icerik', 'paylaşım linki', 'paylasim linki',
+    'naughty', 'milf', 'fetish shop', 'hookup', 'şifreli hesap', 'sifreli hesap',
+    'kilitli hesap', 'vip kanal', 'vip link'
   ];
+
+  // v0.4.1: onceki surumde eklenip cok fazla false-positive ureten kelimeler.
+  // Kullanicinin kendi listesinde kaldigi durumda da otomatik SILINIR.
+  const REMOVED_KEYWORDS = ['anal', 'dm', 'sikis', 'şifreli', 'sifreli', 'abonelik', 'kerhaneler'];
 
   const DEFAULT_ACCOUNTS = [
     'roshytv',
@@ -117,7 +121,7 @@
   // Bu hesaplar hicbir kuralda ASLA gizlenmez (en yuksek oncelik)
   const DEFAULT_WHITELIST = [];
 
-  const DEFAULTS_VERSION = 4;
+  const DEFAULTS_VERSION = 5;
 
   function load(key, fallback) {
     try {
@@ -193,20 +197,44 @@
     return res;
   }
 
-  // Obfuscation cozucu: ayirici karakterleri ve leet'i temizler.
-  // "p.o.r.n" / "p0rn" / "p * rn" -> "porn" gibi kacinmayi engeller.
+  // Obfuscation cozucu: SADECE boslukla ayrilmis her token'in ICINDEKI
+  // ayirici karakterleri ve leet'i temizler. Boylece:
+  //   "p.o.r.n" -> "porn"   (evasion yakalanir)
+  //   "kanal"   -> "kanal"  (kelimeler birbirine YAPISMAZ)
+  // onceki hatali surum tum bosluklari siliyor ve "analiz" -> "...anal..."
+  // sebeniyle her seyi engelliyordu.
   function deobfuscateText(str) {
     let res = normalizeText(str);
     if (!res) return '';
-    // Leet + ayirici temizligi
-    res = res.split('').map(c => (c in LEET_MAP ? LEET_MAP[c] : c)).join('');
-    return res;
+    return res.split(/\s+/).map(token => {
+      let out = '';
+      for (const ch of token) out += (ch in LEET_MAP ? LEET_MAP[ch] : ch);
+      return out;
+    }).join(' ');
   }
 
   function getKeywordList() {
     return (Array.isArray(keywords) ? keywords : [])
-      .map(k => normalizeText(k))
+      .map(k => normalizeText(k).trim())
       .filter(Boolean);
+  }
+
+  // Kelime -> guvenli regex olusturur (word-boundary).
+  // Boylece "anal" kelimesi "kanal" icinde TETIKLENMEZ.
+  // Yalnizca basinda/sonunda rakam veya harf bulunan kelimeler icin sinir eklenir;
+  // "+18", "#nsfw" gibi sembollu ifadeler dogrudan alt-dize olarak aranir.
+  function buildKeywordRegex(kw) {
+    const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const startsWord = /[a-z0-9]/.test(kw.charAt(0));
+    const endsWord = /[a-z0-9]/.test(kw.charAt(kw.length - 1));
+    const prefix = startsWord ? '(?<![a-z0-9])' : '';
+    const suffix = endsWord ? '(?![a-z0-9])' : '';
+    try {
+      return new RegExp(prefix + esc + suffix);
+    } catch (_) {
+      // Lookbehind desteklenmiyorsa guvenli geri donus: dogrudan alt-dize
+      return new RegExp(esc);
+    }
   }
 
   function getAccountList() {
@@ -229,14 +257,26 @@
 
   let cachedAccountSet = new Set(getAccountList());
   let cachedKeywordList = getKeywordList();
+  // Her kelime icin onceden derlenmis regex (word-boundary'li)
+  let cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw) }));
   let cachedDomainList = getDomainList();
   let cachedWhitelist = new Set(getWhitelist());
 
   function refreshCaches() {
     cachedAccountSet = new Set(getAccountList());
     cachedKeywordList = getKeywordList();
+    cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw) }));
     cachedDomainList = getDomainList();
     cachedWhitelist = new Set(getWhitelist());
+  }
+
+  // Kelime sinirli eslesme: "kanal" icinde "anal" TETIKLENMEZ
+  function matchKeyword(text) {
+    if (!text) return null;
+    for (const m of cachedKeywordMatchers) {
+      if (m.re.test(text)) return m.kw;
+    }
+    return null;
   }
 
   // Bir metinde engelli alan adi var mi?
@@ -269,6 +309,16 @@
     if (!Array.isArray(blockDomains)) blockDomains = [];
     if (!Array.isArray(whitelist)) whitelist = [];
     const appliedVersion = load(STORE_KEYS.accountsVersion, 0);
+    if (appliedVersion >= 4) {
+      // v0.4.1: cok fazla false-positive ureten kelimeleri kullanici listesinden de sil
+      const banned = new Set(REMOVED_KEYWORDS.map(k => normalizeText(k)));
+      const filtered = keywords.filter(k => !banned.has(normalizeText(k)));
+      if (filtered.length !== keywords.length) {
+        keywords = filtered;
+        save(STORE_KEYS.keywords, keywords);
+        refreshCaches();
+      }
+    }
     if (appliedVersion < DEFAULTS_VERSION) {
       const haveAcc = new Set(getAccountList());
       let accChanged = false;
@@ -394,11 +444,9 @@
 
     // 3. Profil adi / gorunen isimde anahtar kelime kontrolu (bot avcisi)
     if (scanProfiles && displayName) {
-      const normName = normalizeText(displayName);
-      for (const kw of cachedKeywordList) {
-        if (kw && normName.includes(kw)) {
-          return { type: 'profile', value: kw, label: 'profil: ' + kw + (handle ? ' (@' + handle + ')' : '') };
-        }
+      const kwFound = matchKeyword(normalizeText(displayName));
+      if (kwFound) {
+        return { type: 'profile', value: kwFound, label: 'profil: ' + kwFound + (handle ? ' (@' + handle + ')' : '') };
       }
     }
 
@@ -411,29 +459,34 @@
 
     // 5. Tweet icerigi, linkler ve kartlarda anahtar kelime kontrolu
     const rawText = getTweetText(article) + ' ' + links;
-    const text = normalizeText(rawText);
-    for (const kw of cachedKeywordList) {
-      if (kw && text.includes(kw)) {
-        return { type: 'keyword', value: kw, label: 'kelime: ' + kw };
-      }
+    const kwFound = matchKeyword(normalizeText(rawText));
+    if (kwFound) {
+      return { type: 'keyword', value: kwFound, label: 'kelime: ' + kwFound };
     }
 
     // 6. Obfuscation cozucu ile ikinci tarama (p0rn, p.o.r.n, ...)
+    // Token bazli oldugu icin "kanal" -> "kanal" kalir, "p.o.r.n" -> "porn" olur.
     if (deobfuscate) {
       const deob = deobfuscateText(rawText);
       for (const kw of cachedKeywordList) {
         const kwd = deobfuscateText(kw);
-        if (kwd.length >= 3 && deob.includes(kwd)) {
+        if (kwd.length < 3) continue;
+        const deobRe = buildKeywordRegex(kwd);
+        if (deobRe.test(deob)) {
           return { type: 'obfuscated', value: kw, label: 'gizli kelime: ' + kw };
         }
       }
     }
 
     // 7. Obfuscation cozulmus alan adi kontrolu
+    // Not: '.' leet tablosunda silindigi icin IKI TARAF da cozulur.
     if (deobfuscate) {
-      const domFromLinks = findBlockedDomain(deobfuscateText(links));
-      if (domFromLinks) {
-        return { type: 'domain', value: domFromLinks, label: 'link: ' + domFromLinks };
+      const deobLinks = deobfuscateText(links);
+      for (const d of cachedDomainList) {
+        const dd = deobfuscateText(d).replace(/\s+/g, '');
+        if (dd && deobLinks.replace(/\s+/g, '').includes(dd)) {
+          return { type: 'domain', value: d, label: 'link: ' + d };
+        }
       }
     }
 
@@ -1030,7 +1083,7 @@
       <div class="tpb-panel-header">
         <div class="tpb-panel-title">
           <span>🔒 Twitter Prn Blocker</span>
-          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.4.0</span>
+          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.4.1</span>
         </div>
         <button class="tpb-close-btn" id="tpb-close-modal" title="Kapat">✕</button>
       </div>
