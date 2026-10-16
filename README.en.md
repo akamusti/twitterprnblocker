@@ -17,6 +17,9 @@ A lightweight, privacy-first Tampermonkey userscript that filters out +18, spam,
   - **Word-Boundary Matching (v0.4.1)**: Keywords now match on **word boundaries** — innocent words like `kanal`, `analiz`, `kanalı`, and `normalizasyon` are **never** triggered.
   - **Whitelist (v0.4.0)**: Exempt specific accounts so they are never hidden, regardless of any rule.
   - **Retweet Filter (v0.4.0)**: Optionally hides retweets coming from blocked accounts.
+  - **Confidence Score (v0.5.0)**: Ambiguous "weak" keywords (`vip kanal`, `arşiv link`, `premium link`, etc.) **never hide a tweet on their own**; a second signal is required. Aggressive mode restores the old behavior.
+  - **Uppercase Fix (v0.5.0)**: Uppercase spellings like `HENTAI`, `#IFSA`, and `EROTIK` are now caught (the Turkish `I → ı` lowercasing bug is fixed).
+  - **Single Source of Truth for Version (v0.5.0)**: The panel reads its version from the userscript manager (`GM_info`); no manual sync needed.
 - 🚀 **Buttery 60 FPS Performance**: Uses a `requestAnimationFrame` mutation batching queue to prevent scroll stutters on heavy X timelines.
 - 🎨 **Modern & Native UI**:
   - Sleek X-styled dark theme modal dashboard.
@@ -55,4 +58,5 @@ This userscript operates **strictly client-side**:
 
 ## 📁 Files
 
-- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.1)
+- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.5.0)
+- [`tests/`](tests/README.md) — Offline false-positive regression suite (`tests/run.html`)

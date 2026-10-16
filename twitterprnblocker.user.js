@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitter Prn Blocker (X uyumlu yerel filtre)
 // @namespace    https://github.com/akamusti/twitterprnblocker
-// @version      0.4.1
-// @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler: alan adi, leetspeak/obfuscation, hassas medya, beyaz liste ve RT filtresi. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
+// @version      0.5.0
+// @description  X akisinda +18 / spam icerikleri SADECE senin tarayicinda gizler: alan adi, leetspeak/obfuscation, guven skoru (zayif sinyal filtresi), beyaz liste ve RT filtresi. Harici sunucuya veri gondermez, otomatik block/mute/like/follow yapmaz, X API kullanmaz.
 // @author       akamusti
 // @match        https://x.com/*
 // @match        https://twitter.com/*
@@ -44,9 +44,14 @@
     deobfuscate: 'tpb_deobfuscate',
     whitelist: 'tpb_whitelist',
     hideRetweets: 'tpb_hide_retweets',
+    aggressive: 'tpb_aggressive',
     fabPosition: 'tpb_fab_pos',
     fabVisible: 'tpb_fab_visible',
   };
+
+  // Tek surum kaynagi: userscript manager'dan okunur (elle guncelleme gerekmez).
+  const SCRIPT_VERSION =
+    (typeof GM_info !== 'undefined' && GM_info && GM_info.script && GM_info.script.version) || 'dev';
 
   const DEFAULT_KEYWORDS = [
     'onlyfans', 'fansly', 'nsfw', 'porn', 'porno', 'xxx', 'hentai',
@@ -68,6 +73,16 @@
   // v0.4.1: onceki surumde eklenip cok fazla false-positive ureten kelimeler.
   // Kullanicinin kendi listesinde kaldigi durumda da otomatik SILINIR.
   const REMOVED_KEYWORDS = ['anal', 'dm', 'sikis', 'şifreli', 'sifreli', 'abonelik', 'kerhaneler'];
+
+  // v0.5.0 Guven Skoru: tek basina belirsiz olan "zayif" sinyaller.
+  // Zayif bir kelime TEK BASINA gizleme yapmaz; en az iki bagimsiz sinyal
+  // (baska bir zayif kelime, guclu kelime veya engelli alan adi) gerekir.
+  // Boylece "vip kanal" gibi ifadeler masum tweetleri gizlemez.
+  const WEAK_KEYWORDS = [
+    'vip kanal', 'vip link', 'arşiv link', 'arsiv link', 'premium link',
+    'kirli link', 'özel içerik', 'ozel icerik', 'paylaşım linki', 'paylasim linki',
+    'hookup', 'naughty', 'fetish shop', '18 yas'
+  ];
 
   const DEFAULT_ACCOUNTS = [
     'roshytv',
@@ -155,6 +170,7 @@
   let deobfuscate = load(STORE_KEYS.deobfuscate, true);
   let whitelist = load(STORE_KEYS.whitelist, DEFAULT_WHITELIST);
   let hideRetweets = load(STORE_KEYS.hideRetweets, false);
+  let aggressive = load(STORE_KEYS.aggressive, false);
   let fabPosition = load(STORE_KEYS.fabPosition, 'left');
   let fabVisible = load(STORE_KEYS.fabVisible, true);
   let hiddenCount = 0;
@@ -185,7 +201,11 @@
   // Leetspeak & character normalizer
   function normalizeText(str, removeInvisible = true) {
     if (!str) return '';
-    let res = String(str).toLocaleLowerCase('tr');
+    // v0.5.0 fix: toLocaleLowerCase('tr') ASCII 'I' harfini noktasiz 'i' (U+0131)
+    // yapiyordu; bu yuzden "HENTAI", "IFSA", "EROTIK" gibi buyuk harfli
+    // yazimlar hic yakalanmiyordu. ASCII 'I' once 'i'ye katlanir; kucuk harf
+    // 'i' (U+0131) dokunulmaz, boylece Turkce kelimelerde yanlis pozitif olmaz.
+    let res = String(str).replace(/I/g, 'i').toLocaleLowerCase('tr');
     if (removeInvisible && cleanZeroWidth) {
       res = res.replace(ZERO_WIDTH_REGEX, '');
     }
@@ -257,26 +277,31 @@
 
   let cachedAccountSet = new Set(getAccountList());
   let cachedKeywordList = getKeywordList();
-  // Her kelime icin onceden derlenmis regex (word-boundary'li)
-  let cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw) }));
+  // "Zayif" (belirsiz) kelimeler tek basina gizleme yapmaz.
+  let cachedWeakSet = new Set(WEAK_KEYWORDS.map(k => normalizeText(k).trim()).filter(Boolean));
+  // Her kelime icin onceden derlenmis regex (word-boundary'li) + guven sinifi
+  let cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw), weak: cachedWeakSet.has(kw) }));
   let cachedDomainList = getDomainList();
   let cachedWhitelist = new Set(getWhitelist());
 
   function refreshCaches() {
     cachedAccountSet = new Set(getAccountList());
     cachedKeywordList = getKeywordList();
-    cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw) }));
+    cachedWeakSet = new Set(WEAK_KEYWORDS.map(k => normalizeText(k).trim()).filter(Boolean));
+    cachedKeywordMatchers = cachedKeywordList.map(kw => ({ kw, re: buildKeywordRegex(kw), weak: cachedWeakSet.has(kw) }));
     cachedDomainList = getDomainList();
     cachedWhitelist = new Set(getWhitelist());
   }
 
-  // Kelime sinirli eslesme: "kanal" icinde "anal" TETIKLENMEZ
-  function matchKeyword(text) {
-    if (!text) return null;
+  // Kelime sinirli eslesme: "kanal" icinde "anal" TETIKLENMEZ.
+  // Guven skoru icin ilk eslesme yerine TUM eslesmeler doner.
+  function matchAllKeywords(text) {
+    const hits = [];
+    if (!text) return hits;
     for (const m of cachedKeywordMatchers) {
-      if (m.re.test(text)) return m.kw;
+      if (m.re.test(text)) hits.push({ kw: m.kw, weak: m.weak });
     }
-    return null;
+    return hits;
   }
 
   // Bir metinde engelli alan adi var mi?
@@ -442,40 +467,64 @@
       }
     }
 
-    // 3. Profil adi / gorunen isimde anahtar kelime kontrolu (bot avcisi)
-    if (scanProfiles && displayName) {
-      const kwFound = matchKeyword(normalizeText(displayName));
-      if (kwFound) {
-        return { type: 'profile', value: kwFound, label: 'profil: ' + kwFound + (handle ? ' (@' + handle + ')' : '') };
-      }
-    }
-
-    // 4. Alan adi engellemesi (onlyfans.com, fansly.com, ...)
+    // 3. Alan adi engellemesi (onlyfans.com, fansly.com, ...) - guclu sinyal
     const links = getLinks(article);
     const domFromLinks = findBlockedDomain(links);
     if (domFromLinks) {
       return { type: 'domain', value: domFromLinks, label: 'link: ' + domFromLinks };
     }
 
-    // 5. Tweet icerigi, linkler ve kartlarda anahtar kelime kontrolu
     const rawText = getTweetText(article) + ' ' + links;
-    const kwFound = matchKeyword(normalizeText(rawText));
-    if (kwFound) {
-      return { type: 'keyword', value: kwFound, label: 'kelime: ' + kwFound };
+
+    // 4. Kelime sinyalleri: guven skoru icin ilk degil TUM eslesmeler toplanir.
+    //    strong -> tek basina gizler | weak -> tek basina yetmez (v0.5.0)
+    let strongHit = null;
+    const weakHits = new Set();
+    const addStrong = (hit) => { if (!strongHit) strongHit = hit; };
+
+    // 4a. Profil adi / gorunen isim (bot avcisi)
+    if (scanProfiles && displayName) {
+      for (const h of matchAllKeywords(normalizeText(displayName))) {
+        if (h.weak) weakHits.add(h.kw);
+        else addStrong({ type: 'profile', kw: h.kw });
+      }
     }
 
-    // 6. Obfuscation cozucu ile ikinci tarama (p0rn, p.o.r.n, ...)
+    // 4b. Tweet icerigi, linkler ve kartlar
+    for (const h of matchAllKeywords(normalizeText(rawText))) {
+      if (h.weak) weakHits.add(h.kw);
+      else addStrong({ type: 'keyword', kw: h.kw });
+    }
+
+    // 4c. Obfuscation cozucu ile ikinci tarama (p0rn, p.o.r.n, ...)
     // Token bazli oldugu icin "kanal" -> "kanal" kalir, "p.o.r.n" -> "porn" olur.
     if (deobfuscate) {
       const deob = deobfuscateText(rawText);
-      for (const kw of cachedKeywordList) {
-        const kwd = deobfuscateText(kw);
+      for (const m of cachedKeywordMatchers) {
+        const kwd = deobfuscateText(m.kw);
         if (kwd.length < 3) continue;
-        const deobRe = buildKeywordRegex(kwd);
-        if (deobRe.test(deob)) {
-          return { type: 'obfuscated', value: kw, label: 'gizli kelime: ' + kw };
-        }
+        if (!buildKeywordRegex(kwd).test(deob)) continue;
+        if (m.weak) weakHits.add(m.kw);
+        else addStrong({ type: 'obfuscated', kw: m.kw });
       }
+    }
+
+    // 5. Guclu sinyal her zaman gizler.
+    if (strongHit) {
+      if (strongHit.type === 'profile') {
+        return { type: 'profile', value: strongHit.kw, label: 'profil: ' + strongHit.kw + (handle ? ' (@' + handle + ')' : '') };
+      }
+      if (strongHit.type === 'obfuscated') {
+        return { type: 'obfuscated', value: strongHit.kw, label: 'gizli kelime: ' + strongHit.kw };
+      }
+      return { type: 'keyword', value: strongHit.kw, label: 'kelime: ' + strongHit.kw };
+    }
+
+    // 6. Zayif sinyaller: normal modda en az iki bagimsiz sinyal gerekir,
+    //    agresif modda tek basina da gizler (eski davranis).
+    if (weakHits.size > 0 && (aggressive || weakHits.size >= 2)) {
+      const kw = weakHits.values().next().value;
+      return { type: 'keyword', value: kw, label: 'kelime: ' + kw };
     }
 
     // 7. Obfuscation cozulmus alan adi kontrolu
@@ -1083,7 +1132,7 @@
       <div class="tpb-panel-header">
         <div class="tpb-panel-title">
           <span>🔒 Twitter Prn Blocker</span>
-          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v0.4.1</span>
+          <span style="font-size:11px; font-weight:normal; color:#71767b; background:#16181c; padding:2px 8px; border-radius:9999px;">v${SCRIPT_VERSION}</span>
         </div>
         <button class="tpb-close-btn" id="tpb-close-modal" title="Kapat">✕</button>
       </div>
@@ -1205,6 +1254,14 @@
 
         <div class="tpb-checkbox-group">
           <label class="tpb-checkbox-label">
+            <input type="checkbox" id="tpb-aggressive-check" ${aggressive ? 'checked' : ''}>
+            <span>Agresif Mod: Zayıf Kelimeler Tek Başına da Gizlesin (v0.5.0)</span>
+          </label>
+          <span class="tpb-checkbox-desc">Kapalıyken (önerilen) <b>vip kanal</b> gibi belirsiz kelimeler tek başına yetmez; ikinci bir sinyal gerekir. Açıkken eski davranış: tek zayıf kelime bile gizler (daha çok yanlış pozitif).</span>
+        </div>
+
+        <div class="tpb-checkbox-group">
+          <label class="tpb-checkbox-label">
             <input type="checkbox" id="tpb-fab-check" ${fabVisible ? 'checked' : ''}>
             <span>Sol/Sağ Alt Butonu (FAB) Göster</span>
           </label>
@@ -1232,7 +1289,7 @@
       `;
 
       container.querySelector('#tpb-export-btn').addEventListener('click', () => {
-        const data = JSON.stringify({ keywords, blockedAccounts, blockDomains, whitelist, hideCompletely, scanProfiles, cleanZeroWidth, deobfuscate, hideRetweets }, null, 2);
+        const data = JSON.stringify({ keywords, blockedAccounts, blockDomains, whitelist, hideCompletely, scanProfiles, cleanZeroWidth, deobfuscate, hideRetweets, aggressive }, null, 2);
         navigator.clipboard.writeText(data).then(() => {
           showToast('Yedek JSON panoya kopyalandı!');
         }).catch(() => {
@@ -1254,6 +1311,7 @@
           if (typeof parsed.cleanZeroWidth === 'boolean') cleanZeroWidth = parsed.cleanZeroWidth;
           if (typeof parsed.deobfuscate === 'boolean') deobfuscate = parsed.deobfuscate;
           if (typeof parsed.hideRetweets === 'boolean') hideRetweets = parsed.hideRetweets;
+          if (typeof parsed.aggressive === 'boolean') aggressive = parsed.aggressive;
 
           save(STORE_KEYS.keywords, keywords);
           save(STORE_KEYS.accounts, blockedAccounts);
@@ -1261,6 +1319,7 @@
           save(STORE_KEYS.whitelist, whitelist);
           save(STORE_KEYS.deobfuscate, deobfuscate);
           save(STORE_KEYS.hideRetweets, hideRetweets);
+          save(STORE_KEYS.aggressive, aggressive);
           save(STORE_KEYS.hideCompletely, hideCompletely);
           save(STORE_KEYS.scanProfiles, scanProfiles);
           save(STORE_KEYS.cleanZeroWidth, cleanZeroWidth);
@@ -1285,6 +1344,7 @@
           cleanZeroWidth = true;
           deobfuscate = true;
           hideRetweets = false;
+          aggressive = false;
 
           save(STORE_KEYS.keywords, keywords);
           save(STORE_KEYS.accounts, blockedAccounts);
@@ -1292,6 +1352,7 @@
           save(STORE_KEYS.whitelist, whitelist);
           save(STORE_KEYS.deobfuscate, deobfuscate);
           save(STORE_KEYS.hideRetweets, hideRetweets);
+          save(STORE_KEYS.aggressive, aggressive);
           save(STORE_KEYS.hideCompletely, hideCompletely);
           save(STORE_KEYS.scanProfiles, scanProfiles);
           save(STORE_KEYS.cleanZeroWidth, cleanZeroWidth);
@@ -1315,6 +1376,7 @@
     const wlEl = panel.querySelector('#tpb-wl-input');
     const deobEl = panel.querySelector('#tpb-deobfuscate-check');
     const rtEl = panel.querySelector('#tpb-retweet-check');
+    const aggEl = panel.querySelector('#tpb-aggressive-check');
     const fabEl = panel.querySelector('#tpb-fab-check');
     const posEl = panel.querySelector('#tpb-pos-select');
 
@@ -1341,6 +1403,10 @@
     if (rtEl) {
       hideRetweets = rtEl.checked;
       save(STORE_KEYS.hideRetweets, hideRetweets);
+    }
+    if (aggEl) {
+      aggressive = aggEl.checked;
+      save(STORE_KEYS.aggressive, aggressive);
     }
     if (hideEl) {
       hideCompletely = hideEl.checked;

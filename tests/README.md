@@ -6,6 +6,10 @@ The suite guards the bug fixed in `v0.4.1`: substring matching hid innocent
 tweets such as `analiz`, `kanal` and `normalizasyon`. Cases marked `show` are
 the important ones — they must **not** be filtered.
 
+`v0.5.0` adds coverage for two more regressions: ASCII-uppercase keywords
+(`HENTAI`, `#IFSA`, `EROTIK`) and the confidence score (a weak keyword such as
+`vip kanal` must not hide a tweet on its own).
+
 ## Run
 
 ```bash

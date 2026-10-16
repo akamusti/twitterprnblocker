@@ -84,15 +84,20 @@ Bu proje README'de söz veriyor ve bunları **bozacak kod eklenemez**:
 Bu maddelerden birine dokunan bir "iyileştirme" istenirse **önce kullanıcıya uyumsuzluğu söyle**.
 
 ### 2.3 Sürümleme ve dağıtım zinciri
-- Sürüm **3 yerde** tutarlı olmalı: userscript `@version`, `README.md` (TR), `README.en.md` (EN).
+- **Sürümün tek kaynağı** userscript `@version`. Panel sürümü `GM_info`'dan okunur (elle güncellenmez).
+- `README.md` ve `README.en.md` içinde güncel sürüm `vX.Y.Z` olarak **geçmek zorunda**. CI bunu zorlar: `node scripts/check-consistency.mjs`.
 - `@updateURL` + `@downloadURL` → `.../raw/refs/heads/main/twitterprnblocker.user.js`.
   → `main`'e push edilen her şey kullanıcılara otomatik dağıtılır.
 - GreasyFork sayfası depodan senkronize ediliyor: `https://greasyfork.org/tr/scripts/598698-...`
 - Anlamlı sürüm akışı: `MAJOR.MINOR.PATCH` — hata düzeltme `PATCH`, yeni tespit özelliği `MINOR`, uyumluluk sözleşmesi değişimi `MAJOR`.
 
-### 2.4 Kritik geçmiş: yanlış pozitif dersi
-`v0.4.1` tam da bu yüzden çıktı: alt-dize eşleşmesi (`anal` → `analiz`, `kanal` → `normalizasyon`) masum tweetleri gizliyordu.
-→ **Kural:** anahtar kelime eşleşmesi **kelime sınırı** ile yapılır (`buildKeywordRegex`). Yeni kelime eklerken her zaman masum kelimeyi test et (`kanal`, `analiz`, `normal`, `dm`→ kaldırıldı).
+### 2.4 Kritik geçmiş: yanlış pozitif dersleri
+- `v0.4.1`: alt-dize eşleşmesi (`anal` → `analiz`, `kanal` → `normalizasyon`) masum tweetleri gizliyordu.
+  → **Kural:** anahtar kelime eşleşmesi **kelime sınırı** ile yapılır (`buildKeywordRegex`). Yeni kelime eklerken her zaman masum bir karşı-örnek test et.
+- `v0.5.0` iki ders:
+  1. **`toLocaleLowerCase('tr')` tuzağı**: ASCII `I` → noktasız `ı` yaptığı için `HENTAI`, `IFSA`, `EROTIK` gibi büyük harfli yazımlar kaçıyordu. Normalizasyonda `I` önce `i`'ye katlanır; **küçük harf `ı` dokunulmaz** (yoksa Türkçe kelimelerde yanlış pozitif çıkar).
+  2. **Zayıf sinyal**: belirsiz kelimeler (`WEAK_KEYWORDS`) tek başına gizlemez; ikinci sinyal gerekir (`aggressive` ayarı eski davranışa döner). Yanlış pozitif = kaçırılan tweet'ten daha kötü.
+  → **Kural:** filtre/eşleştirme mantığına dokunursan `tests/cases.js`'e en az bir `show` senaryosu ekle.
 
 ### 2.5 Kod düzeni
 - Dosya tek bir IIFE içinde, `'use strict'`, ~1400 satır. Yapı: `STORE_KEYS` → varsayılanlar → storage (`load/save`) → normalizasyon/deobfuscation → eşleştirme → DOM gizleme → UI paneli → `MutationObserver`.
@@ -141,6 +146,7 @@ Kural: **her dokunduğun filtre kuralı için en az bir `show` (gizlenmemeli) se
 
 ### 3.6 Ağ isteği ekleme yasağını kod seviyesinde koru
 `fetch`, `XMLHttpRequest`, `WebSocket`, `navigator.sendBeacon`, `import(` gibi çağrılar bu dosyada **hiç olmamalı**. Bir "özetleme/AI" özelliği istense bile harici çağrı **eklenmez** (hem X uyumu hem kullanıcı gizlilik sözü). Gerekirse **tamamen yerel** bir çözüm öner.
+Bu yasak artık **CI ile zorlanır**: `scripts/check-consistency.mjs`, userscript'te bu ibarelerden birini görürse build'i kırar.
 
 ### 3.7 Adlandırma tutarsızlığı
 Depo/userscript adı `twitterprnblocker`, GreasyFork adı `twitter-prn-blocker`. Değiştirme; uyumluluk/otomatik güncelleme URL'lerini kırma riski var. Kullanıcı isterse konuşulur.
@@ -161,7 +167,8 @@ Bozuk bir sürüm push edildiyse: yeni bir `PATCH` sürümle düzelt (geçmişi 
 - [ ] Sır / token / PII taraması temiz (§1.1)
 - [ ] Bulunan sır varsa `.env` + `.env.example` + `.gitignore` + rotate (§1.2)
 - [ ] Uyumluluk sözleşmesi bozulmadı (ağ isteği / otomatik işlem yok) (§2.2)
-- [ ] Sürüm 3 yerde güncel: userscript `@version`, `README.md`, `README.en.md` (§2.3)
-- [ ] Yanlış pozitif testi yapıldı (§3.5)
+- [ ] `node scripts/check-consistency.mjs` temiz (sürüm + ağ yasağı) (§2.3, §3.6)
+- [ ] Sürüm `@version` güncel; README'ler `vX.Y.Z` içeriyor (§2.3)
+- [ ] `tests/run.html` geçiyor; dokunulan kural için `show` senaryosu eklendi (§3.5)
 - [ ] İngilizce commit + `git push origin main` (§1.3)
 - [ ] Kullanıcıya **Türkçe** özet verildi (§0)

@@ -10,11 +10,13 @@
  *   config      : optional overrides for the userscript settings
  *                 keywords, accounts, accountsVersion, hideCompletely,
  *                 scanProfiles, cleanZeroWidth, blockDomains, deobfuscate,
- *                 whitelist, hideRetweets
+ *                 whitelist, hideRetweets, aggressive
  *   tweet       : { handle, name, text, links: [], alt, socialContext }
  *
  * The v0.4.1 bug this suite guards against: substring matching hid innocent
  * tweets ("analiz", "kanal", "normalizasyon"). "show" cases are the priority.
+ * v0.5.0 also guards: ASCII-uppercase keywords ("HENTAI", "IFSA") and the
+ * confidence score (a weak keyword alone must not hide).
  */
 window.TPB_CASES = [
   // ---------------------------------------------------------------- SHOW ----
@@ -118,9 +120,49 @@ window.TPB_CASES = [
     tweet: { handle: 'spam5', name: 'Spam Bes', text: 'por\u200Bn izle' }
   },
   {
-    name: 'hide: multi-word keyword "vip kanal"',
-    expect: 'hide', expectType: 'keyword',
+    name: 'show: weak keyword "vip kanal" alone must NOT hide (v0.5.0 confidence)',
+    expect: 'show',
     tweet: { handle: 'spam6', name: 'Spam Alti', text: 'vip kanal linki' }
+  },
+
+  // ------------------------------------------------- UPPERCASE I (v0.5.0) --
+  {
+    name: 'hide: uppercase "HENTAI" (tosmallcase tr bug)',
+    expect: 'hide', expectType: 'keyword',
+    tweet: { handle: 'spam7', name: 'Spam Yedi', text: 'yeni HENTAI icerik' }
+  },
+  {
+    name: 'hide: uppercase "#IFSA"',
+    expect: 'hide', expectType: 'keyword',
+    tweet: { handle: 'spam8', name: 'Spam Sekiz', text: '#IFSA paylasim' }
+  },
+  {
+    name: 'hide: uppercase "EROTIK"',
+    expect: 'hide', expectType: 'keyword',
+    tweet: { handle: 'spam9', name: 'Spam Dokuz', text: 'EROTIK icerik' }
+  },
+  {
+    name: 'show: uppercase "ISTANBUL" must not create a false positive',
+    expect: 'show',
+    tweet: { handle: 'sehir', name: 'Sehir', text: 'ISTANBUL da hava cok guzel' }
+  },
+
+  // ---------------------------------------------- CONFIDENCE SCORE (v0.5) --
+  {
+    name: 'hide: two distinct weak keywords together',
+    expect: 'hide', expectType: 'keyword',
+    tweet: { handle: 'spam10', name: 'Spam On', text: 'vip kanal ve arsiv link' }
+  },
+  {
+    name: 'hide: weak keyword plus strong keyword',
+    expect: 'hide', expectType: 'keyword',
+    tweet: { handle: 'spam11', name: 'Spam Onbir', text: 'vip kanal porno' }
+  },
+  {
+    name: 'hide: weak keyword alone in aggressive mode (legacy behavior)',
+    expect: 'hide', expectType: 'keyword',
+    config: { aggressive: true },
+    tweet: { handle: 'spam12', name: 'Spam Oniki', text: 'vip kanal linki' }
   },
   {
     name: 'hide: retweet of a blocked account (hideRetweets on)',

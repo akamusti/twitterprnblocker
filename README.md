@@ -17,6 +17,9 @@ X (Twitter) akışındaki +18, spam ve bot içeriklerini **sadece senin tarayıc
   - **Kelime Sınırı ile Eşleşme (v0.4.1)**: Anahtar kelimeler artık **kelime sınırı** ile eşleşir — `kanal`, `analiz`, `kanalı`, `normalizasyon` gibi masum kelimeler **asla** tetiklenmez.
   - **Beyaz Liste (v0.4.0)**: Hiçbir filtreye girmemesini istediğin hesaplar (muaf liste).
   - **Retweet Filtresi (v0.4.0)**: Engelli hesapların RT'lerini de gizler (opsiyonel).
+  - **Güven Skoru (v0.5.0)**: Belirsiz "zayıf" kelimeler (`vip kanal`, `arşiv link`, `premium link` vb.) **tek başına gizlemez**; ikinci bir sinyal gerekir. Agresif mod ile eski davranışa dönebilirsin.
+  - **Büyük Harf Düzeltmesi (v0.5.0)**: `HENTAI`, `#IFSA`, `EROTIK` gibi büyük harfli yazımlar artık yakalanır (Türkçe küçük harf `I → ı` dönüşümü hatası giderildi).
+  - **Tek Sürüm Kaynağı (v0.5.0)**: Panel sürümü userscript yöneticisinden (`GM_info`) okunur; elle senkron tutma derdi yok.
 - 🚀 **60 FPS Akıcı Performans**: `requestAnimationFrame` kuyruğu ile sayfa kaydırırken takılma veya kasma yapmaz.
 - 🎨 **Modern & Şık Panel Arayüzü**:
   - X tarzı modern koyu tema modal panel.
@@ -55,4 +58,5 @@ Bu eklenti **%100 istemci taraflı (client-side)** bir filtreleme aracıdır:
 
 ## 📁 Dosyalar
 
-- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.4.1)
+- [`twitterprnblocker.user.js`](twitterprnblocker.user.js) — Userscript (v0.5.0)
+- [`tests/`](tests/README.md) — Offline false-positive regression suite (`tests/run.html`)
