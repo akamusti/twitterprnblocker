@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>twitterprnblocker - false-positive regression tests</title>
+<style>
+  :root { color-scheme: dark; }
+  body { font: 14px/1.5 -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: #15202b; color: #e7e9ea; margin: 0; padding: 24px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.hint { color: #8b98a5; margin: 0 0 18px; }
+  #summary { font-size: 15px; font-weight: 600; padding: 10px 14px; border-radius: 8px; background: #1e2732; margin-bottom: 16px; }
+  #summary.ok { background: #12351f; color: #86efac; }
+  #summary.bad { background: #3a1517; color: #fca5a5; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #2f3336; vertical-align: top; }
+  th { color: #8b98a5; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  tr.fail { background: #2a1416; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .badge.pass { background: #12351f; color: #86efac; }
+  .badge.fail { background: #4a1d22; color: #fca5a5; }
+  .muted { color: #8b98a5; }
+  code { background: #1e2732; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  #fatal { display: none; background: #3a1517; color: #fca5a5; padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>twitterprnblocker - false-positive regression tests</h1>
+<p class="hint">Loads the real userscript inside an isolated iframe per case and checks which tweet cards get filtered. No network, no dependencies.</p>
+<div id="fatal"></div>
+<div id="summary">Running&hellip;</div>
+<table id="results">
+  <thead><tr><th>Result</th><th>Case</th><th>Expected</th><th>Actual</th></tr></thead>
+  <tbody></tbody>
+</table>
+
+<script src="cases.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var SCRIPT_URL = new URL('../twitterprnblocker.user.js', window.location.href).href;
+
+  var CONFIG_TO_STORE = {
+    keywords: 'tpb_keywords',
+    accounts: 'tpb_accounts',
+    accountsVersion: 'tpb_accounts_version',
+    hideCompletely: 'tpb_hide_completely',
+    scanProfiles: 'tpb_scan_profiles',
+    cleanZeroWidth: 'tpb_clean_zerowidth',
+    blockDomains: 'tpb_block_domains',
+    deobfuscate: 'tpb_deobfuscate',
+    whitelist: 'tpb_whitelist',
+    hideRetweets: 'tpb_hide_retweets'
+  };
+
+  var TYPE_PREFIX = {
+    keyword: 'kelime: ',
+    account: 'hesap: ',
+    domain: 'link: ',
+    profile: 'profil: ',
+    retweet: 'RT: ',
+    obfuscated: 'gizli kelime: '
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function buildTweet(t) {
+    t = t || {};
+    var parts = ['<article data-testid="tweet">'];
+    if (t.socialContext) parts.push('<div data-testid="socialContext"><span>' + esc(t.socialContext) + '</span></div>');
+    parts.push('<div data-testid="User-Name"><span>' + esc(t.name || 'Test User') + ' </span><span>@' + esc(t.handle || 'testuser') + '</span></div>');
+    if (t.text) parts.push('<div data-testid="tweetText"><span>' + esc(t.text) + '</span></div>');
+    if (t.alt) parts.push('<img alt="' + esc(t.alt) + '" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">');
+    (t.links || []).forEach(function (h) {
+      parts.push('<a href="' + esc(h) + '" target="_blank"></a>');
+    });
+    parts.push('</article>');
+    return parts.join('');
+  }
+
+  function buildStore(config) {
+    var store = { tpb_accounts_version: 5, tpb_hide_completely: false };
+    Object.keys(config || {}).forEach(function (k) {
+      if (CONFIG_TO_STORE[k]) store[CONFIG_TO_STORE[k]] = config[k];
+    });
+    return store;
+  }
+
+  function runScenario(scenario) {
+    return new Promise(function (resolve) {
+      var settled = false;
+      var iframe = document.createElement('iframe');
+      iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:640px;height:480px;border:0;';
+      document.body.appendChild(iframe);
+
+      function finish(result) {
+        if (settled) return;
+        settled = true;
+        iframe.remove();
+        resolve(result);
+      }
+
+      try {
+        var doc = iframe.contentDocument;
+        doc.open();
+        doc.write('<!doctype html><html><head><meta charset="utf-8"></head><body>' + buildTweet(scenario.tweet) + '</body></html>');
+        doc.close();
+
+        var win = iframe.contentWindow;
+        var store = buildStore(scenario.config);
+        win.GM_getValue = function (k, d) { return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : d; };
+        win.GM_setValue = function (k, v) { store[k] = v; };
+        win.GM_registerMenuCommand = function () {};
+        win.GM_unregisterMenuCommand = function () {};
+
+        var script = doc.createElement('script');
+        script.src = SCRIPT_URL;
+        script.onerror = function () { finish({ error: 'userscript could not be loaded (' + SCRIPT_URL + ')' }); };
+        script.onload = function () {
+          var frames = 0;
+          function tick() {
+            if (frames++ < 3) { win.requestAnimationFrame(tick); return; }
+            var article = doc.querySelector('article[data-testid="tweet"]');
+            if (!article) { finish({ error: 'fixture article not found' }); return; }
+            finish({ hidden: article.dataset.tpbDone === '1', reason: article.dataset.tpbReason || '' });
+          }
+          win.requestAnimationFrame(tick);
+        };
+        (doc.head || doc.documentElement).appendChild(script);
+      } catch (e) {
+        finish({ error: String(e) });
+      }
+
+      setTimeout(function () { finish({ error: 'timeout' }); }, 5000);
+    });
+  }
+
+  function evaluate(scenario, result) {
+    if (result.error) return { pass: false, actual: result.error, problem: 'error' };
+    var wantHide = scenario.expect === 'hide';
+    var actual = result.hidden ? 'hidden' : 'shown';
+    if (result.hidden) actual += result.reason ? ' (' + result.reason + ')' : '';
+    if (wantHide !== result.hidden) {
+      return { pass: false, actual: actual, problem: wantHide ? 'not filtered' : 'false positive' };
+    }
+    if (wantHide && scenario.expectType) {
+      var prefix = TYPE_PREFIX[scenario.expectType] || '';
+      if (result.reason.indexOf(prefix) !== 0) {
+        return { pass: false, actual: actual, problem: 'wrong reason type (want ' + scenario.expectType + ')' };
+      }
+    }
+    return { pass: true, actual: actual, problem: '' };
+  }
+
+  function render(rows) {
+    var tbody = document.querySelector('#results tbody');
+    tbody.innerHTML = '';
+    rows.forEach(function (row) {
+      var tr = document.createElement('tr');
+      if (!row.res.pass) tr.className = 'fail';
+      var expected = row.scenario.expect + (row.scenario.expectType ? ' / ' + row.scenario.expectType : '');
+      tr.innerHTML =
+        '<td><span class="badge ' + (row.res.pass ? 'pass' : 'fail') + '">' + (row.res.pass ? 'PASS' : 'FAIL') + '</span></td>' +
+        '<td>' + esc(row.scenario.name) + (row.res.problem ? '<br><span class="muted">' + esc(row.res.problem) + '</span>' : '') + '</td>' +
+        '<td class="muted">' + esc(expected) + '</td>' +
+        '<td>' + esc(row.res.actual) + '</td>';
+      tbody.appendChild(tr);
+    });
+    var failed = rows.filter(function (r) { return !r.res.pass; }).length;
+    var box = document.getElementById('summary');
+    box.className = failed ? 'bad' : 'ok';
+    box.textContent = (rows.length - failed) + ' / ' + rows.length + ' passed' + (failed ? ' - ' + failed + ' failed' : '');
+  }
+
+  function fatal(msg) {
+    var el = document.getElementById('fatal');
+    el.style.display = 'block';
+    el.textContent = msg;
+    document.getElementById('summary').textContent = 'Could not run';
+  }
+
+  async function main() {
+    var cases = window.TPB_CASES || [];
+    if (!cases.length) { fatal('No cases found. Is tests/cases.js loaded?'); return; }
+    if (window.location.protocol === 'file:') {
+      fatal('Running from file:// often blocks loading ../twitterprnblocker.user.js into the test iframe.\n' +
+            'Serve the repo over HTTP instead, e.g.:\n\n' +
+            '  cd ' + '"<repo root>"' + '\n  python3 -m http.server 8080\n\n' +
+            'Then open http://localhost:8080/tests/run.html');
+      return;
+    }
+    var rows = [];
+    for (var i = 0; i < cases.length; i++) {
+      var scenario = cases[i];
+      var result = await runScenario(scenario);
+      rows.push({ scenario: scenario, res: evaluate(scenario, result) });
+      render(rows);
+    }
+  }
+
+  main();
+})();
+</script>
+</body>
+</html>

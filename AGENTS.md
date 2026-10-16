@@ -127,8 +127,13 @@ vX.Y.Z: <short imperative summary>
 ```
 Küçük işlerde: `fix: ...`, `feat: ...`, `docs: ...`, `refactor: ...` (Conventional Commits) da kabul.
 
-### 3.5 Test yok → manuel kontrol listesi
-Userscript'te otomatik test altyapısı yok. Değişiklikten sonra en azından:
+### 3.5 Test: yanlış pozitif regresyonu + manuel kontrol
+Offline regresyon testi var: **`tests/run.html`** (`tests/README.md`'de çalıştırma adımları). Filtre/eşleştirme mantığına dokunan her değişiklikten sonra bunu çalıştır:
+```bash
+python3 -m http.server 8080    # depo kökünden
+# http://localhost:8080/tests/run.html  → "N / M passed" görünmeli
+```
+Kural: **her dokunduğun filtre kuralı için en az bir `show` (gizlenmemeli) senaryosu ekle** — yanlış pozitif, kaçırılan tweet'ten daha kötüdür. Ek olarak manuel olarak en azından:
 1. `x.com` akışını kaydır, konsolda hata var mı (F12)?
 2. Yeni/değişen filtre: hem **yakalanması gerekeni** hem **yakalanmaması gerekeni** dene (yanlış pozitif = en kritik hata sınıfı).
 3. `Alt + P` paneli açılıyor mu, ayarlar kaydediliyor mu, JSON yedek al/geri yükle çalışıyor mu?
